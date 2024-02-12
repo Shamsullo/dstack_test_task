@@ -2,8 +2,8 @@
 This Python script facilitates running a Docker container and streaming its logs to AWS CloudWatch. It is a test task for the Backend Engineer position at [dstack.ai](https://dstack.ai) as part of my application.  It accepts parameters such as Docker image name, bash command to execute within the container, AWS CloudWatch group and stream names, as well as AWS credentials. The task technical requirements can be found [here](./Backend%20Engineer%20Test%20Task%20(Updated).pdf)
 
 ## Dependencies
-The exact version used can be found in requirements.txt file
-1. >Python 3.10
+The exact version used can be found in the requirements.txt file
+1. Python 3.10 or higher
 2. boto3
 3. docker
    
