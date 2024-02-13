@@ -59,11 +59,13 @@ def ensure_cloudwatch_log_group_and_stream(cloudwatch_client, group_name, stream
 def run_docker_container(docker_image, bash_command):
     client = docker.from_env()
     container = client.containers.run(docker_image, command=bash_command, detach=True)
+
     return container
 
 
 def stream_logs_to_cloudwatch(container, cloudwatch_client, group_name, stream_name):
-    for log in container.logs(stream=True):
+    output = container.attach(stdout=True, stream=True, logs=True)
+    for log in output:
         print(log)
         try:
             cloudwatch_client.put_log_events(
