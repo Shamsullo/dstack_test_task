@@ -1,8 +1,8 @@
 import argparse
 import boto3
-import docker
 from botocore.exceptions import ClientError
 from datetime import datetime
+import subprocess
 
 
 def parse_arguments():
@@ -58,27 +58,45 @@ def ensure_cloudwatch_log_group_and_stream(cloudwatch_client, group_name, stream
 
 def run_docker_container(docker_image, bash_command):
     client = docker.from_env()
-    container = client.containers.run(docker_image, command=bash_command, detach=True)
+    print(type(bash_command))
+    print(bash_command)
+    container = client.containers.run(docker_image, detach=True)
+
     return container
 
 
-def stream_logs_to_cloudwatch(container, cloudwatch_client, group_name, stream_name):
-    output = container.attach(stdout=True, stream=True, logs=True)
-    for log in output:
-        print(log)
-        try:
-            cloudwatch_client.put_log_events(
-                logGroupName=group_name,
-                logStreamName=stream_name,
-                logEvents=[
-                    {
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "message": log.decode("utf-8"),
-                    }
-                ],
-            )
-        except ClientError as e:
-            print(f"Error sending logs to CloudWatch: {e}")
+def run_docker_command(docker_image, bash_command):
+    process = subprocess.Popen(
+        ["docker", "run", "-i", "--rm", docker_image, "/bin/bash", "-c", bash_command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+        bufsize=1
+    )
+    while True:
+        output = process.stdout.readline().strip()
+        if output == '' and process.poll() is not None:
+            break
+        if output:
+            yield output
+
+
+def stream_logs_to_cloudwatch(log, cloudwatch_client, group_name, stream_name):
+
+    try:
+        cloudwatch_client.put_log_events(
+            logGroupName=group_name,
+            logStreamName=stream_name,
+            logEvents=[
+                {
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "message": log,
+                }
+            ],
+        )
+    except ClientError as e:
+        print(f"Error sending logs to CloudWatch: {e}")
+
 
 
 def main():
@@ -90,20 +108,15 @@ def main():
     ensure_cloudwatch_log_group_and_stream(
         cloudwatch_client, args.aws_cloudwatch_group, args.aws_cloudwatch_stream
     )
-    container = run_docker_container(args.docker_image, args.bash_command)
-    print(f"Container {container.id} is running.")
 
-    try:
+    for log in run_docker_command(args.docker_image, args.bash_command):
+        print(log)
         stream_logs_to_cloudwatch(
-            container,
+            log,
             cloudwatch_client,
             args.aws_cloudwatch_group,
             args.aws_cloudwatch_stream,
         )
-    finally:
-        container.stop()
-        container.remove()
-        print("Container stopped and removed.")
 
 
 if __name__ == "__main__":
